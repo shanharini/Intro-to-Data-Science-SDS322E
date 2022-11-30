@@ -1,0 +1,200 @@
+---
+title: "HW 7"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE,  
+                      warning = FALSE, message = FALSE, 
+                      fig.align = "center",
+                      R.options = list(max.print=100))
+
+# Edit the file starting below
+```
+
+### Enter your name and EID here: Harini Shanmugam
+
+**You will submit this homework assignment as a pdf file on Gradescope.**
+
+*For all questions, include the R commands/functions that you used to find your answer (show R chunk). Answers without supporting code will not receive credit. Write full sentences to describe your findings.*
+
+We will use the packages `tidyverse` and `plotROC` for this assignment.
+
+```{r, message = FALSE}
+# Load packages
+library(tidyverse)
+library(plotROC)
+```
+
+------------------------------------------------------------------------
+
+## Question 1: (4 pts)
+
+We will use the `pokemon` dataset for this assignment:
+
+```{r}
+# Upload data from GitHub
+pokemon <- read_csv("https://raw.githubusercontent.com/laylaguyot/datasets/main//pokemon.csv")
+
+# Take a look 
+head(pokemon)
+```
+
+Recode the variable `Legendary`, taking a value of 0 if a Pokemon is not legendary and a value of 1 if it is. Save the resulting data as `my_pokemon`.
+
+```{r}
+# Save to new object
+ my_pokemon <- pokemon %>%
+  # If Legend is TRUE, then rewrite as 1. Otherwise, rewrite as 0.
+  mutate(Legendary=ifelse(Legendary=='TRUE',1,0))
+
+# View first 6 rows of data set
+head(my_pokemon)
+```
+
+Visualize the linear relationship between `Attack` and `HP` (hit points) for each legendary status. *Hint: consider the binary variable as a factor using `as.factor()`.* Do `Attack` and `HP` seem to predict Legendary status? Comment with what you see in the visualization.
+
+```{r}
+# Attack vs HP plot colored by Legendary Status
+ ggplot(my_pokemon, aes(x=Attack, y=HP, color=as.factor(Legendary)))+
+  # Decrease plot point size to 1
+  geom_point(size=1) +
+  labs(title="Attack vs HP Levels by Legendary Status",
+       # Change legend title
+       color="Legendary") +
+   # Linear model line
+   geom_smooth(method="lm")
+```
+
+**The slopes for both linear models are close to 0, indicating no strong correlation between Attack and HP levels. So it is fair to say that Attack and HP levels do not predict Legendary status.**
+
+------------------------------------------------------------------------
+
+## Question 2: (2 pt)
+
+Let's predict `Legendary` status using a linear regression model with `Attack` and `HP` in `my_pokemon`. Fit this model, call it `pokemon_lin`, and write its equation.
+
+```{r}
+# Linear regression model using Attack and HP to predict Legendary status
+pokemon_lin <- lm(Legendary ~ Attack+HP, data = my_pokemon)
+
+# Take a look at the model summary
+summary(pokemon_lin)
+```
+
+**Legend Status = - 0.220178 + 0.002356\*Attack + 0.00166\*HP**
+
+------------------------------------------------------------------------
+
+## Question 3: (3 pts)
+
+Choose a Pokemon whose name starts with the same letter as yours. Take a look at its stats and, using the equation of your model from the previous question, predict the legendary status of this Pokemon, "by hand":
+
+```{r}
+# Find and select a pokemon that starts with the letter H
+my_pokemon %>%
+  # Filter names that start with the letter H
+  filter(str_detect(Name, '^H')) %>%
+  # Filter for just Hypno
+  filter(Name == "Hypno")
+```
+
+Legend Status = - 0.220178 + 0.002356\*Attack + 0.001664\*HP
+
+Legend Status=  - 0.220178 + 0.002356\*73 + 0.001664\*85
+
+Legend Status = 0.09325 \~ 0
+
+Check your answer by using `predict()` with the argument `newdata =`:
+
+```{r}
+# Predicted Legendary value for Hypno using linear regression model
+predict(pokemon_lin, newdata=my_pokemon %>%
+  filter(Name == "Hypno"))
+```
+
+Was your Pokemon predicted to be legendary? Why or why not? Does it match the reality?
+
+**It was not predicted to be legendary as the predicted value was 0.09330972 which is close to 0 (not being legendary). Yes, this matches the reality that Hypno is not legendary.**
+
+------------------------------------------------------------------------
+
+## Question 4: (2 pts)
+
+We can measure how far off our predictions are from reality with residuals. Use `resid()` to find the residuals of each Pokemon in the dataset then find the sum of all residuals. Why does it make sense?
+
+```{r}
+# Caluclate residuals
+resid(pokemon_lin) %>%
+  # Sum all residuals
+  sum
+```
+
+**The sum of all residuals is 2.775558e-15 which is almost 0. This makes sense because the linear model is trying to best fit the data/ be in the center thus having positive and negative residuals. So the sum of all of those residuals should even out and be close to 0.**
+
+------------------------------------------------------------------------
+
+## Question 5: (2 pts)
+
+A logistic regression would be more appropriate to predict `Legendary` status since it can only take two values. Fit this new model with `Attack` and `HP`, call it `pokemon_log`, and write its equation. *Hint: the logit form is given by the R output.*
+
+```{r}
+# Fit the model
+pokemon_log <- glm(Legendary ~ Attack+HP, data = my_pokemon, family = "binomial")
+
+# Take a look at the model summary
+summary(pokemon_log)
+```
+
+**ln(p/1-p) =** **- 7.659078 + 0.032901\*Attack + 0.025923\*HP where p is the probability of a "success" for when Legendary is 1 or True.**
+
+------------------------------------------------------------------------
+
+## Question 6: (2 pts)
+
+According to this new model, is the Pokemon you chose in question 3 predicted to be legendary? Why or why not? *Hint: you can use predict() with the arguments `newdata =` and `type = "response"`.*
+
+```{r}
+# Predicted Legendary value for Hypno using logistic regression model
+predict(pokemon_log, newdata=my_pokemon %>% filter(Name == "Hypno"), type="response")
+```
+
+**It was not predicted to be legendary as the predicted value was 0.04505006 which is close to 0 (not being legendary). Yes, this matches the reality that Hypno is not legendary.**
+
+------------------------------------------------------------------------
+
+## Question 7: (3 pts)
+
+Let's compare the performance of these two models using ROC curves. On the same plot, represent the ROC curve for predicting `Legendary` status based on the predictions from the linear regression in blue and another ROC curve based on the predictions from the logistic regression in orange.
+
+```{r}
+# ROC curves of linear regression and logistic regression
+ggplot(my_pokemon) + 
+  geom_roc(aes(d = Legendary, # predict legendary 0 = no, 1 = yes
+               m = predict(pokemon_lin, my_pokemon)), # use predictions as                                                              measurements
+           color = "blue",
+           n.cuts = 10) +
+  geom_roc(aes(d = Legendary,
+               m = predict(pokemon_log, my_pokemon, type = "response")),
+               color = "orange",
+           n.cuts = 10)
+```
+
+How do these two models compare?
+
+**The two models are very similar. You can conclude the same information from both models.**
+
+------------------------------------------------------------------------
+
+## Formatting: (2 pts)
+
+Comment your code, write full sentences, and knit your file!
+
+------------------------------------------------------------------------
+
+```{r, echo=F}
+## DO NOT DELETE THIS BLOCK!
+Sys.info()
+```
